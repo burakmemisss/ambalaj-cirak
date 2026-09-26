@@ -1,0 +1,21 @@
+# Node
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv/
+ENV/
+
+# macOS
+.DS_Store

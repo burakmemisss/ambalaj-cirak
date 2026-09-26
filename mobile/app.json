@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Ambalaj Çırağı",
+    "slug": "ambalaj-cirak",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ambalaj.cirak"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.ambalaj.cirak"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Çırağın ambalaj görsellerini analiz edebilmesi için fotoğraflarınıza erişim izni gereklidir."
+        }
+      ]
+    ]
+  }
+}
