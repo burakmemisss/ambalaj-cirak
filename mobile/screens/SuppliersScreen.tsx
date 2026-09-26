@@ -2,14 +2,13 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Modal,
   TextInput,
   Alert,
-  ScrollView,
   Platform,
 } from "react-native";
 import { getSuppliers, createSupplier, deleteSupplier, Supplier } from "../services/api";
@@ -117,7 +116,7 @@ export const SuppliersScreen: React.FC = () => {
     try {
       await deleteSupplier(id);
     } catch (err) {
-      // Hata olsa dahi kullanıcı deneyimini bozma
+      // sessizce geç
     }
   };
 
@@ -161,14 +160,13 @@ export const SuppliersScreen: React.FC = () => {
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
-        <FlatList
-          style={styles.flatListStyle}
-          data={suppliers}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainerStyle}
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={true}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
+        >
+          {suppliers.map((item) => (
+            <View key={item.id} style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.nameContainer}>
                   <Text style={styles.supplierName}>{item.name}</Text>
@@ -217,8 +215,8 @@ export const SuppliersScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             </View>
-          )}
-        />
+          ))}
+        </ScrollView>
       )}
 
       {/* YENİ TEDARİKÇİ EKLEME MODALI */}
@@ -375,12 +373,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
-  flatListStyle: {
+  scrollArea: {
     flex: 1,
   },
-  listContainerStyle: {
+  scrollContent: {
     padding: 16,
-    paddingBottom: 140, // Alt kaydırma boşluğu
+    paddingBottom: 160, // Bol alt kaydırma alanı
   },
   card: {
     backgroundColor: COLORS.surface,
