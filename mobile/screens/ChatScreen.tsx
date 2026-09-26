@@ -41,7 +41,11 @@ export const ChatScreen: React.FC = () => {
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert("İzin Gerekli", "Fotoğraf yükleyebilmek için galeri izni gereklidir.");
+      if (Platform.OS === "web") {
+        window.alert("Fotoğraf yükleyebilmek için galeri erişimine izin vermeniz gereklidir.");
+      } else {
+        Alert.alert("İzin Gerekli", "Fotoğraf yükleyebilmek için galeri izni gereklidir.");
+      }
       return;
     }
 
@@ -106,7 +110,11 @@ export const ChatScreen: React.FC = () => {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      Alert.alert("Bağlantı Hatası", "Çırağa ulaşılamadı. Backend servisinizin çalıştığından emin olun.");
+      if (Platform.OS === "web") {
+        window.alert("Çırağa ulaşılamadı. Sunucunuzun çalıştığından emin olun.");
+      } else {
+        Alert.alert("Bağlantı Hatası", "Çırağa ulaşılamadı. Sunucunuzun çalıştığından emin olun.");
+      }
     } finally {
       setLoading(false);
     }
@@ -115,12 +123,14 @@ export const ChatScreen: React.FC = () => {
   const handleFeedback = async (isCorrect: boolean) => {
     try {
       await submitFeedback("last_calc", isCorrect);
-      Alert.alert(
-        isCorrect ? "Teşekkürler! 🎉" : "Kaydedildi 📝",
-        isCorrect
-          ? "Geri bildiriminiz kaydedildi. Çırak bu hesaplamaya daha çok güvenecek."
-          : "Geri bildiriminiz kaydedildi. Nasıl yapıldığını öğretmek ister misiniz?"
-      );
+      const msg = isCorrect
+        ? "Geri bildiriminiz kaydedildi. Çırak bu hesaplamaya daha çok güvenecek."
+        : "Geri bildiriminiz kaydedildi. Nasıl yapıldığını öğretmek ister misiniz?";
+      if (Platform.OS === "web") {
+        window.alert(msg);
+      } else {
+        Alert.alert(isCorrect ? "Teşekkürler! 🎉" : "Kaydedildi 📝", msg);
+      }
     } catch (err) {
       // sessizce geç
     }
@@ -135,7 +145,7 @@ export const ChatScreen: React.FC = () => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={90}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       {/* Üst Başlık */}
       <View style={styles.header}>
@@ -157,6 +167,7 @@ export const ChatScreen: React.FC = () => {
         )}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         contentContainerStyle={styles.listContainer}
+        style={styles.flatListFlex}
       />
 
       {/* Yükleniyor Göstergesi */}
@@ -177,7 +188,7 @@ export const ChatScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Alt Girdi Çubuğu */}
+      {/* Alt Girdi Çubuğu — Sabit Alt Menünün Tam Üstünde */}
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.attachBtn} onPress={pickImage}>
           <Text style={styles.attachIcon}>📷</Text>
@@ -249,8 +260,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
   },
+  flatListFlex: {
+    flex: 1,
+  },
   listContainer: {
     paddingVertical: 12,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flexDirection: "row",
@@ -297,6 +312,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    marginBottom: Platform.OS === "ios" ? 60 : 55, // Alt tab menüsünün tam üstü
   },
   attachBtn: {
     padding: 10,

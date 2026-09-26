@@ -76,7 +76,6 @@ const styles = StyleSheet.create({
   },
   screenContainer: {
     flex: 1,
-    paddingBottom: 70, // TabBar yüksekliği kadar ekran içeriğine alt boşluk ver
   },
   tabBar: {
     flexDirection: "row",
