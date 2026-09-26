@@ -155,9 +155,10 @@ export const SuppliersScreen: React.FC = () => {
           setUploadingId(supplierId);
           try {
             const res = await uploadPriceFile(supplierId, file);
-            window.alert(`Başarılı! 📄 "${file.name}" yüklendi ve ${res.imported || 0} adet fiyat ürünü ayrıştırılıp kaydetti.`);
-          } catch (err) {
-            window.alert(`Yüklenen belge ayrıştırılırken hata oluştu. Lütfen dosya formatını kontrol edin.`);
+            window.alert(`✅ Başarılı! "${file.name}" yüklendi.\n${res.imported || 0} adet ürün fiyatı sisteme kaydedildi.`);
+          } catch (err: any) {
+            const errMsg = err?.message || "Bilinmeyen hata";
+            window.alert(`❌ Dosya yükleme hatası:\n\n${errMsg}\n\nÖnerilen format: Excel (.xlsx) veya CSV (.csv)`);
           } finally {
             setUploadingId(null);
           }

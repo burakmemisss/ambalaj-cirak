@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    justify.content: "center",
+    justifyContent: "center",
     alignItems: "center",
   },
   removeImgText: {

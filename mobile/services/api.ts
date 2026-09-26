@@ -164,8 +164,14 @@ export async function uploadPriceFile(supplierId: string, file: File | { uri: st
   });
 
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Yükleme hatası: ${errText}`);
+    let errDetail = `HTTP ${response.status}`;
+    try {
+      const errJson = await response.json();
+      errDetail = errJson?.detail || errJson?.message || JSON.stringify(errJson);
+    } catch {
+      errDetail = await response.text().catch(() => errDetail);
+    }
+    throw new Error(errDetail);
   }
 
   return response.json();
