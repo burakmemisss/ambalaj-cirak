@@ -1,11 +1,11 @@
-// Uygulama genelinde kullanılan sabitler
+// Uygulama genelinde kullanılan sabitler — 7/24 Canlı Render.com Backend Entegreli
 
-export const API_BASE_URL = __DEV__
-  ? "http://localhost:8000/api"   // Geliştirme
-  : "https://your-oracle-server.com/api"; // Prodüksiyon
+export const API_BASE_URL = "https://ambalaj-cirak.onrender.com/api";
 
 // Geçici kullanıcı ID (Faz 5'te auth eklenecek)
 export const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
+
+export const TAB_BAR_HEIGHT = 64;
 
 export const COLORS = {
   primary: "#1E6FD9",

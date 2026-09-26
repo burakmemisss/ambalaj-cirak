@@ -5,7 +5,7 @@ import { ChatScreen } from "./screens/ChatScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
 import { SuppliersScreen } from "./screens/SuppliersScreen";
 import { ExchangeRatesScreen } from "./screens/ExchangeRatesScreen";
-import { COLORS } from "./constants";
+import { COLORS, TAB_BAR_HEIGHT } from "./constants";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"chat" | "history" | "suppliers" | "rates">("chat");
@@ -82,8 +82,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingVertical: 8,
-    paddingBottom: Platform.OS === "ios" ? 20 : 12,
+    height: TAB_BAR_HEIGHT,
     position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
     bottom: 0,
     left: 0,

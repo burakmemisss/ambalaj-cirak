@@ -16,7 +16,7 @@ import * as ImagePicker from "expo-image-picker";
 import { sendChatMessage, analyzeProductImage, submitFeedback, ChatMessage } from "../services/api";
 import { ChatMessageItem } from "../components/ChatMessageItem";
 import { LearnModal } from "../components/LearnModal";
-import { COLORS } from "../constants";
+import { COLORS, TAB_BAR_HEIGHT } from "../constants";
 
 export const ChatScreen: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -187,7 +187,7 @@ export const ChatScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Alt Girdi Çubuğu — Sabit Alt Tab Menüsünün Tam Üstünde */}
+      {/* Alt Girdi Çubuğu — Sıfıra Sıfır Taban Menüsünün Tam Üstünde */}
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.attachBtn} onPress={pickImage}>
           <Text style={styles.attachIcon}>📷</Text>
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingVertical: 12,
-    paddingBottom: Platform.OS === "web" ? 130 : 80,
+    paddingBottom: Platform.OS === "web" ? 140 : 80,
   },
   loadingContainer: {
     flexDirection: "row",
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    justifyContent: "center",
+    justify.content: "center",
     alignItems: "center",
   },
   removeImgText: {
@@ -313,11 +313,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     position: Platform.OS === "web" ? ("fixed" as any) : "relative",
-    bottom: Platform.OS === "web" ? 56 : 0,
+    bottom: Platform.OS === "web" ? TAB_BAR_HEIGHT : 0,
     left: 0,
     right: 0,
     zIndex: 900,
-    marginBottom: Platform.OS === "ios" ? 60 : 0,
+    marginBottom: Platform.OS === "ios" ? TAB_BAR_HEIGHT : 0,
   },
   attachBtn: {
     padding: 10,
