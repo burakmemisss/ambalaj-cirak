@@ -61,11 +61,20 @@ async def send_message(req: ChatRequest):
     2. Güven skoru hesaplanır
     3. Gemini ile yanıt üretilir
     """
-    supabase = get_supabase()
+    supabase = None
+    try:
+        supabase = get_supabase()
+    except Exception:
+        pass
 
     # 1. Benzer hesaplamaları ara
-    similar = await find_similar_calculations(req.message, threshold=0.65, limit=3)
-    confidence = await calculate_confidence(similar)
+    similar = []
+    confidence = 0
+    try:
+        similar = await find_similar_calculations(req.message, threshold=0.65, limit=3)
+        confidence = await calculate_confidence(similar)
+    except Exception:
+        pass
 
     # 2. Bağlam mesajı hazırla
     context = ""
@@ -87,22 +96,45 @@ async def send_message(req: ChatRequest):
     if confidence < 30:
         context += "\n⚠️ Bu ürün türünü daha önce hiç hesaplamadın. Kullanıcıdan öğrenmeni ve 'Öğren' modunu önermeni istiyorum."
 
-    # 4. Mesaj geçmişi
-    messages_for_gemini = [m.model_dump() for m in req.messages]
-    full_message = req.message + context
+    # 4. Tedarikçi Fiyat Listesi Bağlamı
+    from app.routers.prices import IN_MEMORY_PRICES
+    prices_list = []
+    if supabase:
+        try:
+            db_prices = supabase.table("supplier_price_lists").select("*").order("created_at", desc=True).limit(60).execute()
+            if db_prices.data:
+                prices_list = db_prices.data
+        except Exception:
+            pass
+    if not prices_list:
+        prices_list = IN_MEMORY_PRICES
 
-    # 5. Gemini'ye gönder
+    price_context = ""
+    if prices_list:
+        price_context = "\n\n## Tedarikçi Fiyat Listesindeki Kayıtlı Ürünler:\n"
+        for p in prices_list[:50]:
+            price_context += f"- Ürün: {p.get('product_name')} | Fiyat: {p.get('base_price')} {p.get('currency', 'TRY')} | Birim: {p.get('unit', 'adet')}\n"
+
+    # 5. Mesaj geçmişi ve bağlam
+    messages_for_gemini = [m.model_dump() for m in req.messages]
+    full_message = req.message + context + price_context
+
+    # 6. Gemini'ye gönder
     response_text = await chat_with_gemini(
         messages=messages_for_gemini,
         user_message=full_message,
         image_base64=req.image_base64,
     )
 
-    # 6. Sohbet oturumunu güncelle
-    if req.session_id:
-        _update_session(supabase, req.session_id, req.message, response_text)
-    else:
-        req.session_id = _create_session(supabase, req.user_id, req.message, response_text)
+    # 7. Sohbet oturumunu güncelle
+    if supabase:
+        try:
+            if req.session_id:
+                _update_session(supabase, req.session_id, req.message, response_text)
+            else:
+                req.session_id = _create_session(supabase, req.user_id, req.message, response_text)
+        except Exception:
+            pass
 
     return {
         "session_id": req.session_id,

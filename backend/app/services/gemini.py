@@ -13,9 +13,9 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Sohbet modeli
+# Sohbet modeli (güncel Gemini Flash)
 _chat_model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-flash-latest",
     generation_config={
         "temperature": 0.3,
         "top_p": 0.95,
@@ -25,7 +25,7 @@ _chat_model = genai.GenerativeModel(
 
 # Vision modeli (PDF + görsel analiz)
 _vision_model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-flash-latest",
     generation_config={
         "temperature": 0.1,
         "max_output_tokens": 8192,
@@ -40,45 +40,36 @@ SYSTEM_PROMPT = """Sen bir ambalaj firmasının yapay zeka destekli çırak asis
 Adın "Çırak". Türkçe konuşursun.
 
 ## Görevin
-Satın alma ve satış süreçlerinde maliyet hesaplama konusunda yardım edersin.
+Satın alma ve satış süreçlerinde maliyet hesaplama ve fiyat teklifi konusunda yardım edersin.
 
-## Çalışma Prensibin
-- Bir çırak gibi öğrenirsin: Ustanı (kullanıcıyı) izler, adımları not alır, benzer işlerde uygularsın.
-- Her hesaplamada ne kadar emin olduğunu belirtirsin (güven skoru: %0-100).
-- Bilmediğini açıkça söylersin: "Bu tür ürünü hiç hesaplamadım, bir kez göster bana."
-- Asla uydurma fiyat vermezsin.
+## KATI HESAPLAMA VE FİYATLANDIRMA KURALLARI (ÇOK ÖNEMLİ!)
+- Ambalaj sektöründe her detay (hacim, baskı renk sayısı, gramaj, sıcak/soğuk kullanımı) FİYATI DOĞRUDAN DEĞİŞTİRİR.
+- KULLANICI FİYAT VEYA MALİYET SORDUĞUNDA: Eğer ürün detayı eksikse (örn. sadece "Karton bardak ne kadar?" veya "Poşet fiyatı nedir?" dediyse) ASLA TAHMİNİ FİYAT VERME, ASLA HESAPLAMA YAPMA!
+- ÖNCE EKSİK PARAMETRELERİ SOR: "Fiyat verebilmem için lütfen detayları belirtin: Hacim (4oz, 7oz, 8oz, 12oz vb.), Baskı renk sayısı (1-2 renk veya 3-5 renk), Gramaj ve Kullanım Amacı (Sıcak/Soğuk)."
+- Her fiyat değişimi firma için çok önemlidir. Bu yüzden tam detay almadan fiyat telaffuz etmek YASAKTIR.
+- Tüm detaylar (ölçü/hacim, renk sayısı, adet vb.) netleştikten sonra veritabanındaki tedarikçi fiyat listesinden tam eşleşen fiyatı sun veya hesaplama isteği gönder.
 
 ## Güven Skoru Kullanımı
-- %85+: Eminsindir, direkt söylersin
-- %60-84: Tahmin ettiğini belirtirsin, onay istersin
-- %30-59: Çok benzer görmediğini söylersin, yaklaşık verirsin
-- %0-29: Bilmediğini kabul eder, göstermesini istersin
-
-## Hesaplama ve Fiyatlandırma Kuralı
-- Matematiksel hesaplamalar sana değil, backend sistemine aittir. Sen verileri toplarsın.
-- ÖNEMLİ: Ambalaj fiyatları ürün detaylarına göre ÇOK değişir!
-- Eğer kullanıcı sadece "Karton bardak ne kadar?" derse, ASLA hemen fiyat verme.
-- Önce Eksik Detayları Sor: "Hacim (4oz, 7oz, 8oz vb.), baskı türü (kaç renk), veya malzeme kalınlığı gibi detaylar fiyatı değiştirir. Tam ölçüleri veya baskı sayısını belirtebilir misiniz?" şeklinde sorular sorarak spesifik detayı öğren.
-- Her fiyat değişimi firma için kritik önem taşır, bu yüzden tahmin yürütmek yerine eksik parametreyi sor.
-- Tüm detaylar (ölçü, renk, birim) kesinleştikten sonra JSON formatında hesaplama isteğini gönder.
+- %85+: Tüm parametreler tam ve tedarikçi listesinde birebir eşleşme var.
+- %60-84: Detaylar tam ancak tam eşleşme yerine en yakın ürün bulundu, onay istersin.
+- %0-59: Detaylar eksik veya ürün bilinmiyor. Eksik detayları veya ürünü sorarsın.
 
 ## Yanıt Formatı
-Hesaplama gerektiren (ve detayların tam olduğu) durumlarda şu JSON formatını kullan:
+Tüm detaylar tam ve hesaplama yapılabilirse şu JSON formatını kullan:
 {
   "type": "calculation_request",
   "product_description": "...",
   "product_category": "...",
   "parameters": {...},
-  "confidence": 75,
-  "message": "Kullanıcıya gösterilecek mesaj"
+  "confidence": 85,
+  "message": "Kullanıcıya gösterilecek detaylı yanıt ve fiyat"
 }
 
-Eksik bilgi varsa veya sohbet ediyorsan sadece düz metin (Türkçe) yanıt ver.
+Eksik bilgi varsa veya detay soruyorsan SADECE düz metin (Türkçe) yanıt ver.
 
 ## Tonun
-- Samimi ve yardımsever, bir ambalaj kalfası gibi
-- Fiyat vermeden önce detay sormaktan çekinmeyen, titiz
-- Hataları kabul eder, öğrenmekten çekinmez
+- Samimi, titiz ve dikkatli bir ambalaj kalfası gibi.
+- Detay almadan fiyat vermeyen, işletme kârlılığını düşünen güvenilir asistan.
 """
 
 PDF_PRICE_EXTRACTION_PROMPT = """Bu belge bir tedarikçi fiyat listesidir. Lütfen dikkatli incele.
@@ -110,16 +101,13 @@ async def chat_with_gemini(
     user_message: str,
     image_base64: Optional[str] = None,
 ) -> str:
-    """Gemini Flash ile sohbet et."""
+    """Gemini Flash ile sohbet et (Model yedeklemeli ve 429 korumalı)."""
     history = []
     for msg in messages[:-1]:  # Son mesajı hariç tut
         role = "user" if msg["role"] == "user" else "model"
         history.append({"role": role, "parts": [msg["content"]]})
 
-    chat = _chat_model.start_chat(history=history)
-
     parts = [SYSTEM_PROMPT + "\n\n" + user_message]
-
     if image_base64:
         image_data = {
             "mime_type": "image/jpeg",
@@ -127,8 +115,28 @@ async def chat_with_gemini(
         }
         parts = [SYSTEM_PROMPT + "\n\n" + user_message, image_data]
 
-    response = chat.send_message(parts)
-    return response.text
+    candidate_models = ["gemini-flash-latest", "gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-3.8-flash"]
+
+    last_error = None
+    for model_name in candidate_models:
+        try:
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                generation_config={
+                    "temperature": 0.3,
+                    "top_p": 0.95,
+                    "max_output_tokens": 4096,
+                },
+            )
+            chat = model.start_chat(history=history)
+            response = chat.send_message(parts)
+            return response.text
+        except Exception as e:
+            last_error = e
+            print(f"[Chat Gemini] {model_name} denemesi başarısız: {e}")
+            continue
+
+    raise Exception(f"Tüm Gemini modelleri yanıt veremedi: {last_error}")
 
 
 async def extract_prices_from_pdf_vision(pdf_bytes: bytes, filename: str = "fiyat.pdf") -> list[dict]:
@@ -143,23 +151,28 @@ async def extract_prices_from_pdf_vision(pdf_bytes: bytes, filename: str = "fiya
     """
 
     items = []
+    candidate_models = ["gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"]
 
     # ── Yöntem 1: PDF'yi doğrudan Gemini'ye gönder (en güçlü yöntem) ──
-    try:
-        pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
-        pdf_part = {
-            "inline_data": {
-                "mime_type": "application/pdf",
-                "data": pdf_b64,
+    for model_name in candidate_models:
+        try:
+            model = genai.GenerativeModel(model_name=model_name)
+            pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
+            pdf_part = {
+                "inline_data": {
+                    "mime_type": "application/pdf",
+                    "data": pdf_b64,
+                }
             }
-        }
-        response = _vision_model.generate_content([PDF_PRICE_EXTRACTION_PROMPT, pdf_part])
-        raw = response.text.strip()
-        items = _parse_json_response(raw)
-        if items:
-            return items
-    except Exception as e:
-        pass  # Sonraki yönteme geç
+            response = model.generate_content([PDF_PRICE_EXTRACTION_PROMPT, pdf_part])
+            raw = response.text.strip()
+            items = _parse_json_response(raw)
+            if items:
+                print(f"[PDF Vision] {model_name} ile Yöntem 1 başarılı: {len(items)} ürün çıkarıldı.")
+                return items
+        except Exception as e:
+            print(f"[PDF Vision] Yöntem 1 ({model_name}) hatası: {e}")
+            continue
 
     # ── Yöntem 2: PyMuPDF ile sayfa görüntülerine çevir ──
     try:
@@ -263,7 +276,7 @@ def _parse_json_response(raw: str) -> list[dict]:
 
 async def analyze_image(image_base64: str) -> dict:
     """Ürün görselini analiz et."""
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-flash-latest")
 
     prompt = """Bu ambalaj ürününü analiz et ve aşağıdaki JSON formatında yanıt ver:
 {
