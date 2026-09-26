@@ -141,12 +141,11 @@ export const ChatScreen: React.FC = () => {
     setLearnModalVisible(true);
   };
 
+  const ContainerComponent = Platform.OS === "web" ? View : KeyboardAvoidingView;
+  const containerProps = Platform.OS === "web" ? {} : { behavior: "padding" as const, keyboardVerticalOffset: 90 };
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
+    <ContainerComponent style={styles.container} {...containerProps}>
       {/* Üst Başlık */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>🎓 AI Ambalaj Çırağı</Text>
@@ -188,7 +187,7 @@ export const ChatScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Alt Girdi Çubuğu — Sabit Alt Menünün Tam Üstünde */}
+      {/* Alt Girdi Çubuğu — Sabit Alt Tab Menüsünün Tam Üstünde */}
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.attachBtn} onPress={pickImage}>
           <Text style={styles.attachIcon}>📷</Text>
@@ -232,7 +231,7 @@ export const ChatScreen: React.FC = () => {
           ]);
         }}
       />
-    </KeyboardAvoidingView>
+    </ContainerComponent>
   );
 };
 
@@ -240,6 +239,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+    position: "relative",
   },
   header: {
     paddingTop: 50,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingVertical: 12,
-    paddingBottom: 20,
+    paddingBottom: Platform.OS === "web" ? 130 : 80,
   },
   loadingContainer: {
     flexDirection: "row",
@@ -312,7 +312,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    marginBottom: Platform.OS === "ios" ? 60 : 55, // Alt tab menüsünün tam üstü
+    position: Platform.OS === "web" ? ("fixed" as any) : "relative",
+    bottom: Platform.OS === "web" ? 56 : 0,
+    left: 0,
+    right: 0,
+    zIndex: 900,
+    marginBottom: Platform.OS === "ios" ? 60 : 0,
   },
   attachBtn: {
     padding: 10,
