@@ -1,13 +1,14 @@
-"""Fiyat listesi router — Excel/PDF import (AI destekli + Fallback hafıza)"""
+"""Fiyat listesi router — Excel/PDF import (AI Vision destekli + Fallback hafıza)"""
 import io
 import json
+import base64
 import traceback
 from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from app.database import get_supabase
 from app.services.scheduler import convert_to_try
-from app.services.gemini import chat_with_gemini
+from app.services.gemini import chat_with_gemini, extract_prices_from_pdf_vision
 
 router = APIRouter()
 
@@ -75,7 +76,6 @@ async def add_price(entry: PriceEntry):
 @router.post("/import/excel/{supplier_id}")
 async def import_excel(supplier_id: str, file: UploadFile = File(...)):
     """Excel / CSV fiyat listesi import et."""
-    # Dosya içeriğini oku
     try:
         contents = await file.read()
     except Exception as e:
@@ -84,7 +84,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
     if not contents:
         raise HTTPException(status_code=400, detail="Dosya boş görünüyor.")
 
-    # pandas kontrolü
     try:
         import pandas as pd
     except ImportError:
@@ -93,7 +92,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
     df = None
     parse_error = ""
 
-    # Excel formatlarını dene
     for engine in ["openpyxl", "xlrd"]:
         try:
             df = pd.read_excel(io.BytesIO(contents), engine=engine)
@@ -102,7 +100,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
             parse_error = str(e)
             continue
 
-    # CSV fallback
     if df is None:
         for sep in [",", ";", "\t"]:
             try:
@@ -123,7 +120,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
             detail=f"Dosya ayrıştırılamadı. Lütfen .xlsx veya .csv formatını deneyin. Hata: {parse_error}"
         )
 
-    # Sütun isimlerini normalize et
     col_map = {
         "ürün": "product_name", "urun": "product_name", "product": "product_name",
         "ürün adı": "product_name", "urun adi": "product_name", "ad": "product_name",
@@ -139,7 +135,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
 
     df.columns = [col_map.get(str(c).lower().strip(), str(c).lower().strip()) for c in df.columns]
 
-    # Fiyat sütunu yoksa ilk sayısal sütunu kullan
     if "base_price" not in df.columns:
         for col in df.columns:
             try:
@@ -150,7 +145,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
             except Exception:
                 continue
 
-    # Ürün adı sütunu yoksa ilk metin sütununu kullan
     if "product_name" not in df.columns:
         for col in df.columns:
             if col != "base_price":
@@ -163,7 +157,6 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
 
     for _, row in df.iterrows():
         try:
-            # Fiyat değerini çek
             raw_price = row.get("base_price", None)
             if raw_price is None or str(raw_price).strip() in ["", "nan", "NaN", "None"]:
                 skipped += 1
@@ -199,7 +192,7 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
                 supabase = get_supabase()
                 supabase.table("supplier_price_lists").insert(entry).execute()
             except Exception:
-                pass  # DB başarısız olsa da hafızada tutuluyor
+                pass
 
             inserted += 1
         except Exception:
@@ -225,8 +218,7 @@ async def import_excel(supplier_id: str, file: UploadFile = File(...)):
 
 @router.post("/import/pdf/{supplier_id}")
 async def import_pdf(supplier_id: str, file: UploadFile = File(...)):
-    """PDF fiyat listesi import et (Yapay Zeka / Gemini Flash ile Akıllı Ayrıştırma)."""
-    # Dosya içeriğini oku
+    """PDF fiyat listesi import et — Gemini AI Vision ile akıllı ayrıştırma (taranmış PDF dahil)."""
     try:
         contents = await file.read()
     except Exception as e:
@@ -235,99 +227,14 @@ async def import_pdf(supplier_id: str, file: UploadFile = File(...)):
     if not contents:
         raise HTTPException(status_code=400, detail="Dosya boş görünüyor.")
 
-    extracted_text = ""
+    # Gemini Vision ile PDF'yi direkt analiz et (metin veya taranmış olsun fark etmez)
+    items = await extract_prices_from_pdf_vision(contents, file.filename or "fiyat_listesi.pdf")
 
-    # 1. Yöntem: pdfplumber ile düz metin çıkart
-    try:
-        import pdfplumber
-        with pdfplumber.open(io.BytesIO(contents)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    extracted_text += page_text + "\n"
-    except Exception as e:
-        # pdfplumber başarısız — devam et
-        extracted_text = ""
-
-    # 2. Yöntem: PyPDF2 ile fallback
-    if len(extracted_text.strip()) < 20:
-        try:
-            import PyPDF2
-            reader = PyPDF2.PdfReader(io.BytesIO(contents))
-            for page in reader.pages:
-                t = page.extract_text()
-                if t:
-                    extracted_text += t + "\n"
-        except Exception:
-            pass
-
-    items = []
-
-    if len(extracted_text.strip()) > 20:
-        # Gemini ile AI analizi
-        prompt = f"""Aşağıdaki metin bir tedarikçi ambalaj fiyat listesidir.
-Listedeki tüm ürünleri, birim fiyatlarını ve para birimlerini çıkar.
-SADECE aşağıdaki JSON dizisi formatında yanıt ver, başka açıklama ekleme:
-[
-  {{"product_name": "Ürün Adı", "product_category": "ambalaj", "unit": "adet", "base_price": 10.50, "currency": "TRY"}}
-]
-
-Kurallar:
-- base_price mutlaka sayısal (float) olmalı
-- currency TRY, USD veya EUR olmalı
-- Fiyatı belli olmayan ürünleri listeye ekleme
-- En az 1 ürün döndür
-
-Metin:
-{extracted_text[:5000]}"""
-
-        try:
-            response = await chat_with_gemini([], prompt)
-            # JSON'u temizle
-            clean = response.strip()
-            if "```" in clean:
-                parts = clean.split("```")
-                for part in parts:
-                    stripped = part.strip()
-                    if stripped.startswith("json"):
-                        stripped = stripped[4:].strip()
-                    if stripped.startswith("["):
-                        clean = stripped
-                        break
-            # JSON parse et
-            if clean.startswith("["):
-                parsed = json.loads(clean)
-                if isinstance(parsed, list) and len(parsed) > 0:
-                    items = parsed
-        except Exception as e:
-            items = []
-
-    # Metin çıkarılamazsa PDF görüntü tabanlı çözüm dene (base64 ile Gemini Vision)
-    if not items and len(extracted_text.strip()) < 20:
-        try:
-            import base64
-            pdf_base64 = base64.b64encode(contents).decode("utf-8")
-            prompt = """Bu PDF bir tedarikçi fiyat listesidir. Görüntüdeki ürün adlarını, fiyatlarını ve birimlerini bul.
-SADECE JSON dizisi döndür:
-[{"product_name": "Ürün", "product_category": "ambalaj", "unit": "adet", "base_price": 10.50, "currency": "TRY"}]"""
-            # Gemini text-only ile fallback (vision PDF desteklemiyor)
-            response = await chat_with_gemini([], f"{prompt}\n\nPDF metin çıktısı alınamadı, format okunaksız.")
-            clean = response.strip()
-            if "[" in clean and "]" in clean:
-                start = clean.index("[")
-                end = clean.rindex("]") + 1
-                parsed = json.loads(clean[start:end])
-                if isinstance(parsed, list):
-                    items = parsed
-        except Exception:
-            pass
-
-    # Hiçbir ürün bulunamazsa 422 döndür
     if not items:
         raise HTTPException(
             status_code=422,
-            detail="PDF'den veri çıkarılamadı. PDF metin tabanlı değil veya taranmış görüntü olabilir. "
-                   "Lütfen Excel (.xlsx) veya CSV formatında deneyin — daha güvenilir sonuç verir."
+            detail="PDF analiz edildi ancak içinde fiyat listesi bulunamadı. "
+                   "Lütfen dosyanın bir ürün/fiyat listesi içerdiğinden emin olun."
         )
 
     inserted = 0
@@ -335,7 +242,6 @@ SADECE JSON dizisi döndür:
 
     for item in items:
         try:
-            # Zorunlu alanları kontrol et
             if not isinstance(item, dict):
                 continue
             price = float(item.get("base_price", 0))
@@ -368,8 +274,7 @@ SADECE JSON dizisi döndür:
     if inserted == 0:
         raise HTTPException(
             status_code=422,
-            detail="PDF okundu ancak geçerli fiyat verisi bulunamadı. "
-                   "Excel formatı çok daha güvenilir sonuç verir."
+            detail="PDF okundu ve analiz edildi ancak geçerli fiyat verisi (sayısal fiyat > 0) bulunamadı."
         )
 
     return {"success": True, "imported": inserted, "items": imported_items}
