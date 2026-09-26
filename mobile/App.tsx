@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ChatScreen } from "./screens/ChatScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
@@ -22,7 +22,7 @@ export default function App() {
         {activeTab === "rates" && <ExchangeRatesScreen />}
       </View>
 
-      {/* Alt Gezinme Sekmesi (Bottom Navigation Bar) */}
+      {/* Alt Gezinme Sekmesi (Sabit Taban Menüsü) */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === "chat" && styles.activeTabItem]}
@@ -72,9 +72,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+    position: "relative",
   },
   screenContainer: {
     flex: 1,
+    paddingBottom: 70, // TabBar yüksekliği kadar ekran içeriğine alt boşluk ver
   },
   tabBar: {
     flexDirection: "row",
@@ -82,7 +84,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingVertical: 8,
-    paddingBottom: 16,
+    paddingBottom: Platform.OS === "ios" ? 20 : 12,
+    position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 20,
   },
   tabItem: {
     flex: 1,
