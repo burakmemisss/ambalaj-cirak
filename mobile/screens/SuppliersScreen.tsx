@@ -10,6 +10,7 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  Platform,
 } from "react-native";
 import { getSuppliers, createSupplier, deleteSupplier, Supplier } from "../services/api";
 import { COLORS } from "../constants";
@@ -69,7 +70,11 @@ export const SuppliersScreen: React.FC = () => {
 
   const handleAddSupplier = async () => {
     if (!name.trim()) {
-      Alert.alert("Eksik Bilgi", "Lütfen tedarikçi / firma adını girin.");
+      if (Platform.OS === "web") {
+        window.alert("Lütfen tedarikçi / firma adını girin.");
+      } else {
+        Alert.alert("Eksik Bilgi", "Lütfen tedarikçi / firma adını girin.");
+      }
       return;
     }
 
@@ -83,37 +88,59 @@ export const SuppliersScreen: React.FC = () => {
         notes: notes.trim() || undefined,
       });
 
-      setSuppliers((prev) => [...prev, newSup]);
-      Alert.alert("Başarılı! ✅", `"${name}" tedarikçi listesine eklendi.`);
+      setSuppliers((prev) => [newSup, ...prev]);
       
+      if (Platform.OS === "web") {
+        window.alert(`"${name}" tedarikçi listesine eklendi.`);
+      } else {
+        Alert.alert("Başarılı! ✅", `"${name}" tedarikçi listesine eklendi.`);
+      }
+
       // Formu sıfırla ve kapat
       setName("");
       setContact("");
       setNotes("");
       setModalVisible(false);
     } catch (err) {
-      Alert.alert("Hata", "Tedarikçi eklenirken hata oluştu.");
+      if (Platform.OS === "web") {
+        window.alert("Tedarikçi eklenirken hata oluştu.");
+      } else {
+        Alert.alert("Hata", "Tedarikçi eklenirken hata oluştu.");
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
+  const confirmAndDelete = async (id: string) => {
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await deleteSupplier(id);
+    } catch (err) {
+      // Hata olsa dahi kullanıcı deneyimini bozma
+    }
+  };
+
   const handleDelete = (id: string, supplierName: string) => {
-    Alert.alert("Tedarikçi Silinsin mi?", `"${supplierName}" tedarikçisini silmek istediğinize emin misiniz?`, [
-      { text: "İptal", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteSupplier(id);
-            setSuppliers((prev) => prev.filter((s) => s.id !== id));
-          } catch (err) {
-            setSuppliers((prev) => prev.filter((s) => s.id !== id));
-          }
-        },
-      },
-    ]);
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(`"${supplierName}" tedarikçisini silmek istediğinize emin misiniz?`);
+      if (confirmed) {
+        confirmAndDelete(id);
+      }
+    } else {
+      Alert.alert(
+        "Tedarikçi Silinsin mi?",
+        `"${supplierName}" tedarikçisini silmek istediğinize emin misiniz?`,
+        [
+          { text: "İptal", style: "cancel" },
+          {
+            text: "Sil",
+            style: "destructive",
+            onPress: () => confirmAndDelete(id),
+          },
+        ]
+      );
+    }
   };
 
   return (
@@ -135,9 +162,11 @@ export const SuppliersScreen: React.FC = () => {
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
+          style={styles.flatListStyle}
           data={suppliers}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={styles.listContainerStyle}
+          showsVerticalScrollIndicator={true}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
@@ -162,8 +191,9 @@ export const SuppliersScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.deleteBtn}
                     onPress={() => handleDelete(item.id, item.name)}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.deleteBtnText}>✕</Text>
+                    <Text style={styles.deleteBtnText}>Sil 🗑️</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -174,12 +204,14 @@ export const SuppliersScreen: React.FC = () => {
               <View style={styles.cardActions}>
                 <TouchableOpacity
                   style={styles.actionBtn}
-                  onPress={() =>
-                    Alert.alert(
-                      "Fiyat Listesi Yükleme",
-                      `"${item.name}" için Excel/PDF fiyat listenizi backend /api/prices/import-file endpoint'inden yükleyebilirsiniz.`
-                    )
-                  }
+                  onPress={() => {
+                    const msg = `"${item.name}" için Excel/PDF fiyat listenizi backend /api/prices/import-file endpoint'inden yükleyebilirsiniz.`;
+                    if (Platform.OS === "web") {
+                      window.alert(msg);
+                    } else {
+                      Alert.alert("Fiyat Listesi Yükleme", msg);
+                    }
+                  }}
                 >
                   <Text style={styles.actionBtnText}>📄 Fiyat Listesi Yükle (Excel/PDF)</Text>
                 </TouchableOpacity>
@@ -343,8 +375,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
-  list: {
+  flatListStyle: {
+    flex: 1,
+  },
+  listContainerStyle: {
     padding: 16,
+    paddingBottom: 140, // Alt kaydırma boşluğu
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -389,7 +425,7 @@ const styles = StyleSheet.create({
   rightBadgeContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   currencyBadge: {
     backgroundColor: COLORS.surfaceLight,
@@ -403,15 +439,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   deleteBtn: {
-    backgroundColor: `${COLORS.error}20`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: `${COLORS.error}25`,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
   },
   deleteBtnText: {
     color: COLORS.error,
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 11,
   },
   contactText: {
     fontSize: 13,
