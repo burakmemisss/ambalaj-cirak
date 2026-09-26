@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { API_BASE_URL, DEFAULT_USER_ID } from "../constants";
 
 export interface ChatMessage {
@@ -114,24 +115,59 @@ export async function learnFromUser(data: {
   return response.json();
 }
 
-// ── Vision API ──────────────────────────────────────────
+// ── Vision API (Cross-Platform Görsel Yükleme) ─────────────────
 
 export async function analyzeProductImage(imageUri: string): Promise<ImageAnalysis> {
   const formData = new FormData();
 
-  // React Native FormData için
-  formData.append("file", {
-    uri: imageUri,
-    type: "image/jpeg",
-    name: "product.jpg",
-  } as unknown as Blob);
+  if (Platform.OS === "web" || imageUri.startsWith("data:") || imageUri.startsWith("blob:")) {
+    const res = await fetch(imageUri);
+    const blob = await res.blob();
+    const file = new File([blob], "product.jpg", { type: "image/jpeg" });
+    formData.append("file", file);
+  } else {
+    formData.append("file", {
+      uri: imageUri,
+      type: "image/jpeg",
+      name: "product.jpg",
+    } as unknown as Blob);
+  }
 
   const response = await fetch(`${API_BASE_URL}/vision/analyze`, {
     method: "POST",
     body: formData,
   });
 
-  if (!response.ok) throw new Error("Görsel analiz hatası");
+  if (!response.ok) throw new Error("Görsel analiz edilemedi.");
+  return response.json();
+}
+
+// ── Fiyat Listesi Yükleme (Excel/PDF) ───────────────────────
+
+export async function uploadPriceFile(supplierId: string, file: File | { uri: string; name: string; type: string }): Promise<{ success: boolean; imported?: number; message?: string }> {
+  const formData = new FormData();
+
+  if (file instanceof File) {
+    formData.append("file", file);
+  } else {
+    formData.append("file", file as unknown as Blob);
+  }
+
+  const isPdf = file.name.toLowerCase().endsWith(".pdf");
+  const endpoint = isPdf
+    ? `${API_BASE_URL}/prices/import/pdf/${supplierId}`
+    : `${API_BASE_URL}/prices/import/excel/${supplierId}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Yükleme hatası: ${errText}`);
+  }
+
   return response.json();
 }
 

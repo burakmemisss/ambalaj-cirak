@@ -11,12 +11,13 @@ import {
   Alert,
   Platform,
 } from "react-native";
-import { getSuppliers, createSupplier, deleteSupplier, Supplier } from "../services/api";
+import { getSuppliers, createSupplier, deleteSupplier, uploadPriceFile, Supplier } from "../services/api";
 import { COLORS } from "../constants";
 
 export const SuppliersScreen: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -95,7 +96,6 @@ export const SuppliersScreen: React.FC = () => {
         Alert.alert("Başarılı! ✅", `"${name}" tedarikçi listesine eklendi.`);
       }
 
-      // Formu sıfırla ve kapat
       setName("");
       setContact("");
       setNotes("");
@@ -138,6 +138,36 @@ export const SuppliersScreen: React.FC = () => {
             onPress: () => confirmAndDelete(id),
           },
         ]
+      );
+    }
+  };
+
+  // GERÇEK DOSYA SEÇME VE YÜKLEME FONKSİYONU (Excel / PDF)
+  const handleUploadFile = (supplierId: string, supplierName: string) => {
+    if (Platform.OS === "web") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".xlsx,.xls,.pdf";
+      input.onchange = async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        if (target.files && target.files[0]) {
+          const file = target.files[0];
+          setUploadingId(supplierId);
+          try {
+            const res = await uploadPriceFile(supplierId, file);
+            window.alert(`Başarılı! 📄 "${file.name}" yüklendi ve ${res.imported || 0} adet fiyat ürünü ayrıştırılıp kaydetti.`);
+          } catch (err) {
+            window.alert(`Yüklenen belge ayrıştırılırken hata oluştu. Lütfen dosya formatını kontrol edin.`);
+          } finally {
+            setUploadingId(null);
+          }
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert(
+        "Fiyat Listesi Yükleme",
+        `"${supplierName}" için Excel/PDF dosyanızı cihazınızdan seçip yüklemek için web arayüzünü kullanabilirsiniz.`
       );
     }
   };
@@ -201,17 +231,13 @@ export const SuppliersScreen: React.FC = () => {
 
               <View style={styles.cardActions}>
                 <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => {
-                    const msg = `"${item.name}" için Excel/PDF fiyat listenizi backend /api/prices/import-file endpoint'inden yükleyebilirsiniz.`;
-                    if (Platform.OS === "web") {
-                      window.alert(msg);
-                    } else {
-                      Alert.alert("Fiyat Listesi Yükleme", msg);
-                    }
-                  }}
+                  style={[styles.actionBtn, uploadingId === item.id && styles.disabledBtn]}
+                  onPress={() => handleUploadFile(item.id, item.name)}
+                  disabled={uploadingId === item.id}
                 >
-                  <Text style={styles.actionBtnText}>📄 Fiyat Listesi Yükle (Excel/PDF)</Text>
+                  <Text style={styles.actionBtnText}>
+                    {uploadingId === item.id ? "📄 Dosya Yükleniyor..." : "📄 Fiyat Listesi Yükle (Excel/PDF)"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -323,7 +349,7 @@ export const SuppliersScreen: React.FC = () => {
                 disabled={submitting}
               >
                 <Text style={styles.saveModalText}>
-                  {submitting ? "Kaydediliyor..." : "Tedarikçiyi Kaydet"}
+                  {submitting ? "Kaydedilizce..." : "Tedarikçiyi Kaydet"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -378,7 +404,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 160, // Bol alt kaydırma alanı
+    paddingBottom: 160,
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -473,7 +499,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 12,
   },
-  // Modal Stilleri
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.75)",
