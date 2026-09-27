@@ -111,9 +111,9 @@ export const ChatScreen: React.FC = () => {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       if (Platform.OS === "web") {
-        window.alert("Çırağa ulaşılamadı. Sunucunuzun çalıştığından emin olun.");
+        window.alert(`Çırağa ulaşılamadı. Sunucunuzun çalıştığından emin olun.\n\nDetay: ${String(error)}`);
       } else {
-        Alert.alert("Bağlantı Hatası", "Çırağa ulaşılamadı. Sunucunuzun çalıştığından emin olun.");
+        Alert.alert("Bağlantı Hatası", `Çırağa ulaşılamadı. Sunucunuzun çalıştığından emin olun.\n\nDetay: ${String(error)}`);
       }
     } finally {
       setLoading(false);
@@ -308,9 +308,9 @@ const styles = StyleSheet.create({
     position: Platform.OS === "web" ? ("fixed" as any) : "relative",
     bottom: Platform.OS === "web" ? TAB_BAR_HEIGHT : 0,
     left: Platform.OS === "web" ? "50%" : 0,
-    right: Platform.OS === "web" ? undefined : 0,
-    width: Platform.OS === "web" ? 480 : undefined,
-    marginLeft: Platform.OS === "web" ? -240 : 0,
+    transform: Platform.OS === "web" ? [{ translateX: "-50%" }] : undefined,
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
     zIndex: 900,
     marginBottom: Platform.OS === "ios" ? TAB_BAR_HEIGHT : 0,
   } as any,
