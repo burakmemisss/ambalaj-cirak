@@ -177,6 +177,23 @@ export async function uploadPriceFile(supplierId: string, file: File | { uri: st
   return response.json();
 }
 
+export interface PriceItem {
+  id?: string;
+  supplier_id: string;
+  product_name: string;
+  product_category: string;
+  base_price: number;
+  currency: string;
+  unit: string;
+  price_in_try?: number;
+}
+
+export async function getSupplierPrices(): Promise<{ total: number; prices: PriceItem[] }> {
+  const response = await fetch(`${API_BASE_URL}/prices/all`);
+  if (!response.ok) throw new Error("Fiyatlar alınamadı");
+  return response.json();
+}
+
 // ── Exchange Rates ──────────────────────────────────────
 
 export async function getExchangeRates(): Promise<Record<string, number>> {

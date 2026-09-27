@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
-import { getSuppliers, createSupplier, deleteSupplier, uploadPriceFile, Supplier } from "../services/api";
+import { getSuppliers, createSupplier, deleteSupplier, uploadPriceFile, getSupplierPrices, Supplier, PriceItem } from "../services/api";
 import { COLORS } from "../constants";
 
 export const SuppliersScreen: React.FC = () => {
@@ -27,6 +27,12 @@ export const SuppliersScreen: React.FC = () => {
   const [contact, setContact] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Prices Modal State
+  const [pricesModalVisible, setPricesModalVisible] = useState(false);
+  const [selectedSupplierName, setSelectedSupplierName] = useState("");
+  const [supplierPrices, setSupplierPrices] = useState<PriceItem[]>([]);
+  const [loadingPrices, setLoadingPrices] = useState(false);
 
   const fetchSuppliers = async () => {
     setLoading(true);
@@ -173,6 +179,26 @@ export const SuppliersScreen: React.FC = () => {
     }
   };
 
+  const handleViewPrices = async (supplierId: string, supplierName: string) => {
+    setSelectedSupplierName(supplierName);
+    setPricesModalVisible(true);
+    setLoadingPrices(true);
+    try {
+      const res = await getSupplierPrices();
+      const filtered = res.prices.filter((p) => p.supplier_id === supplierId);
+      setSupplierPrices(filtered);
+    } catch (err) {
+      if (Platform.OS === "web") {
+        window.alert("Fiyat listesi yüklenemedi.");
+      } else {
+        Alert.alert("Hata", "Fiyat listesi yüklenemedi.");
+      }
+      setSupplierPrices([]);
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Üst Başlık ve Yeni Ekle Butonu */}
@@ -231,15 +257,26 @@ export const SuppliersScreen: React.FC = () => {
               {item.notes && <Text style={styles.notesText}>📝 {item.notes}</Text>}
 
               <View style={styles.cardActions}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, uploadingId === item.id && styles.disabledBtn]}
-                  onPress={() => handleUploadFile(item.id, item.name)}
-                  disabled={uploadingId === item.id}
-                >
-                  <Text style={styles.actionBtnText}>
-                    {uploadingId === item.id ? "📄 Dosya Yükleniyor..." : "📄 Fiyat Listesi Yükle (Excel/PDF)"}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, uploadingId === item.id && styles.disabledBtn, { flex: 1, marginRight: 8 }]}
+                    onPress={() => handleUploadFile(item.id, item.name)}
+                    disabled={uploadingId === item.id}
+                  >
+                    <Text style={styles.actionBtnText}>
+                      {uploadingId === item.id ? "📄 Yükleniyor..." : "📄 Liste Yükle (Excel/PDF)"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.viewBtn, { flex: 1 }]}
+                    onPress={() => handleViewPrices(item.id, item.name)}
+                  >
+                    <Text style={[styles.actionBtnText, { color: COLORS.primary }]}>
+                      📋 Listeyi Gör
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ))}
@@ -354,6 +391,49 @@ export const SuppliersScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* FİYAT LİSTESİ MODALI */}
+      <Modal visible={pricesModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: "90%", width: "95%" }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📋 {selectedSupplierName} Fiyat Listesi</Text>
+              <TouchableOpacity onPress={() => setPricesModalVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingPrices ? (
+              <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 40 }} />
+            ) : supplierPrices.length === 0 ? (
+              <View style={{ padding: 20, alignItems: "center" }}>
+                <Text style={{ color: COLORS.textSecondary }}>Henüz kayıtlı fiyat bulunmuyor.</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1 }}>
+                <View style={{ padding: 16 }}>
+                  {supplierPrices.map((item, index) => (
+                    <View key={item.id || index.toString()} style={styles.priceRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.priceProductName}>{item.product_name}</Text>
+                        <Text style={styles.priceProductCat}>{item.product_category}</Text>
+                      </View>
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={styles.priceMainText}>
+                          {item.base_price} {item.currency} / {item.unit}
+                        </Text>
+                        {item.price_in_try && item.currency !== "TRY" && (
+                          <Text style={styles.priceSubText}>≈ {item.price_in_try.toFixed(2)} TL</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -499,6 +579,44 @@ const styles = StyleSheet.create({
     color: COLORS.primaryLight,
     fontWeight: "600",
     fontSize: 12,
+    textAlign: "center",
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  viewBtn: {
+    backgroundColor: `${COLORS.primary}15`,
+    borderColor: COLORS.primary,
+    borderWidth: 1,
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  priceProductName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  priceProductCat: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  priceMainText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.success,
+  },
+  priceSubText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,

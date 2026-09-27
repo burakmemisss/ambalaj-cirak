@@ -16,6 +16,39 @@ router = APIRouter()
 IN_MEMORY_PRICES: List[dict] = []
 
 
+@router.get("/all")
+async def get_all_prices():
+    """Tüm kayıtlı fiyatları listele (DB + In-Memory). TL karşılığı ile birlikte."""
+    prices = []
+
+    # DB'den oku
+    try:
+        supabase = get_supabase()
+        result = supabase.table("supplier_price_lists").select("*").order("created_at", desc=True).limit(200).execute()
+        if result.data:
+            prices = result.data
+    except Exception:
+        pass
+
+    # DB boşsa in-memory'den oku
+    if not prices:
+        prices = list(IN_MEMORY_PRICES)
+
+    # TL karşılığını ekle
+    for p in prices:
+        raw_price = float(p.get("base_price", 0))
+        curr = p.get("currency", "TRY")
+        if curr == "TRY":
+            p["price_in_try"] = raw_price
+        else:
+            try:
+                p["price_in_try"] = await convert_to_try(raw_price, curr)
+            except Exception:
+                p["price_in_try"] = None
+
+    return {"total": len(prices), "prices": prices}
+
+
 class PriceEntry(BaseModel):
     supplier_id: str
     product_category: str

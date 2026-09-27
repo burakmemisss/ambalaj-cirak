@@ -63,28 +63,41 @@ Satın alma ve satış süreçlerinde maliyet hesaplama ve fiyat teklifi sunma k
 - İşletme kârlılığını düşünen, lafı uzatmadan hızlıca fiyat veren güvenilir asistan.
 """
 
-PDF_PRICE_EXTRACTION_PROMPT = """Bu belge bir tedarikçi fiyat listesidir. Lütfen dikkatli incele.
+PDF_PRICE_EXTRACTION_PROMPT = """Bu belge bir tedarikçi fiyat listesidir. ÇOK DİKKATLİ ve EKSİKSİZ incele.
 
-Görevin: Belgedeki TÜM ürün/malzeme adlarını, birim fiyatlarını, birimlerini ve para birimlerini bul.
+## GÖREVİN
+Belgedeki TÜM ürün/malzeme satırlarını, birim fiyatlarını, birimlerini ve para birimlerini bul.
+HİÇBİR SATIRI, HİÇBİR ÖLÇÜYÜ, HİÇBİR VARYASYONU ATLAMA!
 
+## KRİTİK KURALLAR — EKSİKSİZ ÇIKARMA
+1. TABLO YAPISI: Eğer bir tablo varsa, her satırı ayrı ayrı işle. Sütun başlıklarını her satıra uygula.
+2. ÖLÇÜ VARYASYONLARI: Farklı ölçüler (4oz, 7oz, 8oz, 9oz, 12oz, 14oz, 16oz vb.) HER BİRİ AYRI BİR KAYIT olmalıdır.
+3. RENK VARYASYONLARI: Farklı baskı renk sayıları (1-2 renk, 3-5 renk vb.) farklı fiyata sahipse HER BİRİ AYRI KAYIT olmalıdır.
+4. SICAK/SOĞUK VARYASYONLARI: Sıcak içecek ve soğuk içecek bardakları farklı fiyata sahipse AYRI KAYIT olmalıdır.
+5. GRAMAJ VARYASYONLARI: Farklı gramajlar (190gr, 250gr, 350gr vb.) varsa HER BİRİ AYRI KAYIT.
+6. product_name alanına ölçü, gramaj, tür, varyasyon bilgilerini MUTLAKA dahil et.
+   Örnek: "Karton Bardak 8oz Sıcak 1-2 Renk Baskı", "Karton Bardak 12oz Soğuk 3-5 Renk Baskı"
+
+## JSON FORMATI
 SADECE aşağıdaki JSON dizisi formatında yanıt ver, başka hiçbir şey yazma:
 [
   {
-    "product_name": "Ürün adı ve varsa ölçüsü/ebadı",
-    "product_category": "ambalaj kategorisi (kağıt poşet / streç film / karton kutu / balonlu naylon / vb.)",
+    "product_name": "Ürün adı + ölçü + tür + varyasyon detayı",
+    "product_category": "ambalaj kategorisi (karton bardak / kağıt poşet / streç film / karton kutu / vb.)",
     "unit": "birim (adet / kg / rulo / metre / koli / vb.)",
     "base_price": 10.50,
-    "currency": "TRY"
+    "currency": "USD"
   }
 ]
 
-Önemli kurallar:
-- base_price mutlaka sayısal (ondalık nokta ile) olmalı, örn: 12.50
+## DOĞRULAMA KURALLARI
+- base_price mutlaka sayısal (ondalık nokta ile) olmalı, örn: 0.025
 - currency yalnızca TRY, USD veya EUR olabilir (belirtilmemişse TRY kabul et)
 - Fiyatı belli olmayan ürünleri ekleme
-- Tablo satırlarını, liste maddelerini tek tek işle
+- Tablo satırlarını, liste maddelerini TEK TEK işle — toplu atlama YASAK
 - Türkçe karakterleri doğru yaz (ü, ş, ğ, ç, ı, ö)
-- Yanıt olarak SADECE [ ile başlayan JSON array döndür"""
+- Yanıt olarak SADECE [ ile başlayan JSON array döndür
+- Belgede kaç farklı ürün/ölçü/varyasyon varsa TAMAMINI çıkar, hiçbirini atlama!"""
 
 
 async def chat_with_gemini(
@@ -136,18 +149,25 @@ async def extract_prices_from_pdf_vision(pdf_bytes: bytes, filename: str = "fiya
     Metin tabanlı, taranmış veya görüntü tabanlı PDF'lerin tümünü destekler.
     
     Strateji:
-    1. PDF'yi doğrudan Gemini'ye inline olarak gönder (application/pdf)
-    2. Başarısız olursa PyMuPDF ile sayfa görüntülerine çevir, sayfa sayfa gönder
-    3. pdfplumber ile metin çıkar, metin olarak Gemini'ye gönder
+    1. PDF'yi doğrudan Gemini'ye inline olarak gönder (yüksek token limiti)
+    2. Başarısız olursa PyMuPDF ile SAYFA SAYFA görüntüye çevir, her sayfayı ayrı analiz et
+    3. pdfplumber ile metin çıkar, sayfa sayfa Gemini'ye gönder
+    4. Tüm sonuçları birleştir ve duplicate'ları filtrele
     """
 
-    items = []
-    candidate_models = ["gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"]
+    all_items = []
+    candidate_models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.8-flash"]
 
     # ── Yöntem 1: PDF'yi doğrudan Gemini'ye gönder (en güçlü yöntem) ──
     for model_name in candidate_models:
         try:
-            model = genai.GenerativeModel(model_name=model_name)
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                generation_config={
+                    "temperature": 0.1,
+                    "max_output_tokens": 8192,
+                },
+            )
             pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
             pdf_part = {
                 "inline_data": {
@@ -160,69 +180,124 @@ async def extract_prices_from_pdf_vision(pdf_bytes: bytes, filename: str = "fiya
             items = _parse_json_response(raw)
             if items:
                 print(f"[PDF Vision] {model_name} ile Yöntem 1 başarılı: {len(items)} ürün çıkarıldı.")
-                return items
+                all_items.extend(items)
+                break
         except Exception as e:
             print(f"[PDF Vision] Yöntem 1 ({model_name}) hatası: {e}")
             continue
 
-    # ── Yöntem 2: PyMuPDF ile sayfa görüntülerine çevir ──
-    try:
-        import fitz  # PyMuPDF
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        page_images = []
-        for page_num in range(min(len(doc), 10)):  # İlk 10 sayfa
-            page = doc.load_page(page_num)
-            mat = fitz.Matrix(2, 2)  # 2x zoom for better quality
-            pix = page.get_pixmap(matrix=mat)
-            img_bytes = pix.tobytes("jpeg")
-            img_b64 = base64.standard_b64encode(img_bytes).decode("utf-8")
-            page_images.append(img_b64)
-        doc.close()
+    # ── Yöntem 2: PyMuPDF ile SAYFA SAYFA görüntüye çevir, her sayfayı ayrı analiz et ──
+    if not all_items:
+        try:
+            import fitz  # PyMuPDF
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            total_pages = len(doc)
+            print(f"[PDF Vision] PyMuPDF ile {total_pages} sayfa bulundu, sayfa sayfa analiz ediliyor...")
 
-        if page_images:
-            # Tüm sayfaları tek istekte gönder (max 10 sayfa)
-            parts = [PDF_PRICE_EXTRACTION_PROMPT]
-            for img_b64 in page_images:
-                parts.append({
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": img_b64,
-                    }
-                })
-            response = _vision_model.generate_content(parts)
-            raw = response.text.strip()
-            items = _parse_json_response(raw)
-            if items:
-                return items
-    except ImportError:
-        pass  # fitz kurulu değil, devam et
-    except Exception:
-        pass
+            for page_num in range(min(total_pages, 20)):  # İlk 20 sayfa
+                try:
+                    page = doc.load_page(page_num)
+                    mat = fitz.Matrix(2.5, 2.5)  # 2.5x zoom for better quality
+                    pix = page.get_pixmap(matrix=mat)
+                    img_bytes_data = pix.tobytes("jpeg")
+                    img_b64 = base64.standard_b64encode(img_bytes_data).decode("utf-8")
 
-    # ── Yöntem 3: pdfplumber ile metin çıkar, Gemini'ye metin olarak gönder ──
-    try:
-        import pdfplumber
-        extracted_text = ""
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
-                t = page.extract_text()
-                if t:
-                    extracted_text += t + "\n"
+                    page_prompt = f"""Sayfa {page_num + 1}/{total_pages}.
 
-        if len(extracted_text.strip()) > 30:
-            prompt = f"""{PDF_PRICE_EXTRACTION_PROMPT}
+{PDF_PRICE_EXTRACTION_PROMPT}"""
 
-Belge metni:
-{extracted_text[:6000]}"""
-            response = _vision_model.generate_content([prompt])
-            raw = response.text.strip()
-            items = _parse_json_response(raw)
-            if items:
-                return items
-    except Exception:
-        pass
+                    for model_name in candidate_models[:2]:
+                        try:
+                            model = genai.GenerativeModel(
+                                model_name=model_name,
+                                generation_config={
+                                    "temperature": 0.1,
+                                    "max_output_tokens": 8192,
+                                },
+                            )
+                            response = model.generate_content([
+                                page_prompt,
+                                {
+                                    "inline_data": {
+                                        "mime_type": "image/jpeg",
+                                        "data": img_b64,
+                                    }
+                                }
+                            ])
+                            raw = response.text.strip()
+                            page_items = _parse_json_response(raw)
+                            if page_items:
+                                print(f"[PDF Vision] Sayfa {page_num + 1}: {len(page_items)} ürün çıkarıldı ({model_name})")
+                                all_items.extend(page_items)
+                                break
+                        except Exception as e:
+                            print(f"[PDF Vision] Sayfa {page_num + 1} ({model_name}) hatası: {e}")
+                            continue
+                except Exception as e:
+                    print(f"[PDF Vision] Sayfa {page_num + 1} atlandı: {e}")
+                    continue
 
-    return items
+            doc.close()
+        except ImportError:
+            print("[PDF Vision] PyMuPDF (fitz) kurulu değil, Yöntem 2 atlanıyor.")
+        except Exception as e:
+            print(f"[PDF Vision] Yöntem 2 genel hatası: {e}")
+
+    # ── Yöntem 3: pdfplumber ile metin çıkar, sayfa sayfa Gemini'ye gönder ──
+    if not all_items:
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                for page_idx, page in enumerate(pdf.pages):
+                    t = page.extract_text()
+                    if not t or len(t.strip()) < 20:
+                        continue
+
+                    page_prompt = f"""{PDF_PRICE_EXTRACTION_PROMPT}
+
+Sayfa {page_idx + 1} metni:
+{t[:4000]}"""
+
+                    try:
+                        model = genai.GenerativeModel(
+                            model_name=candidate_models[0],
+                            generation_config={
+                                "temperature": 0.1,
+                                "max_output_tokens": 8192,
+                            },
+                        )
+                        response = model.generate_content([page_prompt])
+                        raw = response.text.strip()
+                        page_items = _parse_json_response(raw)
+                        if page_items:
+                            print(f"[PDF Vision] pdfplumber Sayfa {page_idx + 1}: {len(page_items)} ürün")
+                            all_items.extend(page_items)
+                    except Exception as e:
+                        print(f"[PDF Vision] pdfplumber Sayfa {page_idx + 1} hatası: {e}")
+                        continue
+        except Exception as e:
+            print(f"[PDF Vision] Yöntem 3 genel hatası: {e}")
+
+    # ── Duplicate filtreleme ──
+    unique_items = _deduplicate_items(all_items)
+    print(f"[PDF Vision] Toplam: {len(all_items)} -> Deduplicate: {len(unique_items)} ürün")
+
+    return unique_items
+
+
+def _deduplicate_items(items: list[dict]) -> list[dict]:
+    """Aynı ürün adı + fiyat kombinasyonunu filtrele."""
+    seen = set()
+    unique = []
+    for item in items:
+        key = (
+            str(item.get("product_name", "")).strip().lower(),
+            float(item.get("base_price", 0)),
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
 
 
 def _parse_json_response(raw: str) -> list[dict]:
