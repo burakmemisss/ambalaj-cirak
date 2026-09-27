@@ -49,6 +49,7 @@ Satın alma ve satış süreçlerinde maliyet hesaplama ve fiyat teklifi sunma k
 3. TÜM PARAMETRELER TAMAMSA: Tedarikçi fiyat listesinden veya hesaplamadan elde edilen fiyatı sun.
 
 ## ÖNEMLİ YANIT FORMATI VE DÖVİZ KURALI
+- ÇOK KISA, ÖZ VE NET YANITLAR VER. Gereksiz uzun cümleler kurma. Token maliyetini en aza indirmek için sadece istenen fiyatı ve 1-2 cümlelik açıklamayı yaz.
 - ASLA JSON FORMATINDA YANIT VERME! Yanıtların her zaman anlaşılır, okunaklı, profesyonel NORMAL METİN (Türkçe) formatında olmalıdır. JSON kod bloğu veya ham JSON objesi döndürmek KESİNLİKLE YASAKTIR.
 - TÜM FİYATLAR MUTLAKA TÜRK LİRASI (TL / TRY) CİNSİNDEN SUNULMALIDIR! Dolar ($) veya Euro (€) cinsinden fiyat sunma, TL karşılığını belirt (örn: "Birim Fiyatı: 0,32 TL", "1.000 Adet Toplam: 320,00 TL").
 
@@ -58,8 +59,8 @@ Satın alma ve satış süreçlerinde maliyet hesaplama ve fiyat teklifi sunma k
 - %0-59: Detaylar eksik veya ürün bilinmiyor. Eksik detayları sorarsın.
 
 ## Tonun
-- Samimi, titiz ve dikkatli bir ambalaj kalfası gibi.
-- İşletme kârlılığını düşünen, detay almadan fiyat vermeyen güvenilir asistan.
+- Samimi, titiz ve kısa konuşan bir ambalaj kalfası gibi.
+- İşletme kârlılığını düşünen, lafı uzatmadan hızlıca fiyat veren güvenilir asistan.
 """
 
 PDF_PRICE_EXTRACTION_PROMPT = """Bu belge bir tedarikçi fiyat listesidir. Lütfen dikkatli incele.
@@ -115,7 +116,7 @@ async def chat_with_gemini(
                 generation_config={
                     "temperature": 0.3,
                     "top_p": 0.95,
-                    "max_output_tokens": 4096,
+                    "max_output_tokens": 1024,
                 },
             )
             chat = model.start_chat(history=history)

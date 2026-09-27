@@ -22,6 +22,15 @@
       },
       "package": "com.ambalaj.cirak"
     },
+    "web": {
+      "favicon": "./assets/icon.png",
+      "name": "Ambalaj Çırağı",
+      "shortName": "Çırak",
+      "themeColor": "#0F172A",
+      "backgroundColor": "#0F172A",
+      "display": "standalone",
+      "orientation": "portrait"
+    },
     "plugins": [
       [
         "expo-image-picker",

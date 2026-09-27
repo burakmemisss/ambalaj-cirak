@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform, Dimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ChatScreen } from "./screens/ChatScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
@@ -11,7 +11,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"chat" | "history" | "suppliers" | "rates">("chat");
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.outerContainer}>
+    <View style={styles.container}>
       <StatusBar style="light" />
 
       {/* Ekranlar */}
@@ -64,19 +65,30 @@ export default function App() {
           </Text>
         </TouchableOpacity>
       </View>
+    </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    alignItems: "center",
+    overflow: "hidden" as any,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
     position: "relative",
-  },
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    overflow: "hidden" as any,
+  } as any,
   screenContainer: {
     flex: 1,
-  },
+    overflow: "hidden" as any,
+  } as any,
   tabBar: {
     flexDirection: "row",
     backgroundColor: COLORS.surface,
@@ -85,8 +97,10 @@ const styles = StyleSheet.create({
     height: TAB_BAR_HEIGHT,
     position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
     bottom: 0,
-    left: 0,
-    right: 0,
+    left: Platform.OS === "web" ? "50%" : 0,
+    right: Platform.OS === "web" ? undefined : 0,
+    width: Platform.OS === "web" ? 480 : "100%",
+    marginLeft: Platform.OS === "web" ? -240 : 0,
     zIndex: 1000,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -3 },

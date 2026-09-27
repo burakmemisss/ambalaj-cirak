@@ -123,16 +123,9 @@ export const ChatScreen: React.FC = () => {
   const handleFeedback = async (isCorrect: boolean) => {
     try {
       await submitFeedback("last_calc", isCorrect);
-      const msg = isCorrect
-        ? "Geri bildiriminiz kaydedildi. Çırak bu hesaplamaya daha çok güvenecek."
-        : "Geri bildiriminiz kaydedildi. Nasıl yapıldığını öğretmek ister misiniz?";
-      if (Platform.OS === "web") {
-        window.alert(msg);
-      } else {
-        Alert.alert(isCorrect ? "Teşekkürler! 🎉" : "Kaydedildi 📝", msg);
-      }
     } catch (err) {
-      // sessizce geç
+      // Backend'e ulaşılamasa bile kullanıcıya sorun yaratma
+      console.log("Feedback gönderilirken hata:", err);
     }
   };
 
@@ -314,11 +307,13 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     position: Platform.OS === "web" ? ("fixed" as any) : "relative",
     bottom: Platform.OS === "web" ? TAB_BAR_HEIGHT : 0,
-    left: 0,
-    right: 0,
+    left: Platform.OS === "web" ? "50%" : 0,
+    right: Platform.OS === "web" ? undefined : 0,
+    width: Platform.OS === "web" ? 480 : undefined,
+    marginLeft: Platform.OS === "web" ? -240 : 0,
     zIndex: 900,
     marginBottom: Platform.OS === "ios" ? TAB_BAR_HEIGHT : 0,
-  },
+  } as any,
   attachBtn: {
     padding: 10,
   },

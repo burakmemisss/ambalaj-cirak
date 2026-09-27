@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { ChatMessage, SimilarItem } from "../services/api";
 import { ConfidenceBadge } from "./ConfidenceBadge";
@@ -16,6 +16,14 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   onLearnMore,
 }) => {
   const isUser = message.role === "user";
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
+
+  const handleFeedbackClick = (isCorrect: boolean) => {
+    setFeedbackGiven(true);
+    if (onFeedback) {
+      onFeedback(isCorrect);
+    }
+  };
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
@@ -66,21 +74,27 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         {/* Geri Bildirim Butonları (Asistan Mesajlarında) */}
         {!isUser && message.confidence !== undefined && (
           <View style={styles.feedbackContainer}>
-            <Text style={styles.feedbackPrompt}>Bu hesaplama doğru mu?</Text>
-            <View style={styles.feedbackButtons}>
-              <TouchableOpacity
-                style={[styles.feedbackBtn, styles.correctBtn]}
-                onPress={() => onFeedback?.(true)}
-              >
-                <Text style={styles.feedbackBtnText}>✅ Evet, Doğru</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.feedbackBtn, styles.wrongBtn]}
-                onPress={() => onFeedback?.(false)}
-              >
-                <Text style={styles.feedbackBtnText}>❌ Hayır / Düzelt</Text>
-              </TouchableOpacity>
-            </View>
+            {feedbackGiven ? (
+              <Text style={styles.feedbackSuccessText}>✓ Geri bildiriminiz alındı</Text>
+            ) : (
+              <>
+                <Text style={styles.feedbackPrompt}>Bu hesaplama doğru mu?</Text>
+                <View style={styles.feedbackButtons}>
+                  <TouchableOpacity
+                    style={[styles.feedbackBtn, styles.correctBtn]}
+                    onPress={() => handleFeedbackClick(true)}
+                  >
+                    <Text style={styles.feedbackBtnText}>✅ Evet, Doğru</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.feedbackBtn, styles.wrongBtn]}
+                    onPress={() => handleFeedbackClick(false)}
+                  >
+                    <Text style={styles.feedbackBtnText}>❌ Hayır / Düzelt</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         )}
 
@@ -228,6 +242,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: COLORS.text,
+  },
+  feedbackSuccessText: {
+    fontSize: 12,
+    color: COLORS.success,
+    textAlign: "center",
+    fontWeight: "600",
+    fontStyle: "italic",
+    paddingVertical: 4,
   },
   teachBtn: {
     marginTop: 10,
