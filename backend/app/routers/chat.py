@@ -96,8 +96,10 @@ async def send_message(req: ChatRequest):
     if confidence < 30:
         context += "\n⚠️ Bu ürün türünü daha önce hiç hesaplamadın. Kullanıcıdan öğrenmeni ve 'Öğren' modunu önermeni istiyorum."
 
-    # 4. Tedarikçi Fiyat Listesi Bağlamı
+    # 4. Tedarikçi Fiyat Listesi Bağlamı (TCMB Canlı Döviz Kuru ile TL Çevrimi)
     from app.routers.prices import IN_MEMORY_PRICES
+    from app.services.scheduler import convert_to_try
+
     prices_list = []
     if supabase:
         try:
@@ -111,9 +113,15 @@ async def send_message(req: ChatRequest):
 
     price_context = ""
     if prices_list:
-        price_context = "\n\n## Tedarikçi Fiyat Listesindeki Kayıtlı Ürünler:\n"
+        price_context = "\n\n## Tedarikçi Fiyat Listesindeki Kayıtlı Ürünler (TÜM FİYATLAR TCMB CANLI KURU İLE TL/TRY CİNSİNE ÇEVRİLMİŞTİR):\n"
         for p in prices_list[:50]:
-            price_context += f"- Ürün: {p.get('product_name')} | Fiyat: {p.get('base_price')} {p.get('currency', 'TRY')} | Birim: {p.get('unit', 'adet')}\n"
+            raw_price = float(p.get("base_price", 0))
+            curr = p.get("currency", "TRY")
+            try:
+                try_price = await convert_to_try(raw_price, curr)
+            except Exception:
+                try_price = raw_price * 34.25
+            price_context += f"- Ürün: {p.get('product_name')} | TL Birim Fiyatı: {try_price:.2f} TL (Orijinal: {raw_price} {curr}) | Birim: {p.get('unit', 'adet')}\n"
 
     # 5. Mesaj geçmişi ve bağlam
     messages_for_gemini = [m.model_dump() for m in req.messages]
